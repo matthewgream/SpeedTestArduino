@@ -1,0 +1,55 @@
+
+Seeed Studio XIAO ESP32C6 
+https://wiki.seeedstudio.com/xiao_wifi_usage_esp32c6/
+
+// -----------------------------------------------------------------------------------------------
+
+UP
+Wifi configure external antenna
+Wifi connecting (xxxxxxxx) ..... connected (-46 dbm) ... allocated (192.168.0.162)
+Wifi ssid=xxxxxxxx, bssid=xx:xx:xx:61:3B:49, protocol=802.11bgnax, bandwidth=20Mhz, channel=11, country=GB , txpower=80, rssi=-46
+Time ...
+Time OK
+Client: Address "xx.xx.xx.xx", Provider "Virgin Media Limited", Location (51.508530, -0.125740)
+10 Servers online
+Server: London speedlon.hyperoptic.com:8080 by Hyperoptic Limited [distance 0.190066 km, version 2.900000, latency 11 ms]
+Server: London speedtest.cadence.net.uk:8080 by Voneus Limited [distance 0.196224 km, version 2.110000, latency 11 ms]
+Server: London speedtest-lon06.vorboss.net:8080 by Vorboss Limited [distance 2.348742 km, version 2.110000, latency 11 ms]
+Server: London speedtest-1.london.network.youfibre.com:8080 by YouFibre [distance 1.654360 km, version 2.110000, latency 17 ms]
+Server: London speedtest02a.web.zen.net.uk:8080 by Zen Internet [distance 1.654360 km, version 2.110000, latency 15 ms]
+Server: London speedtest-lon.retn.net:8080 by RETN [distance 1.654360 km, version 2.110000, latency 12 ms]
+Server: London speedtest.toob.co.uk:8080 by toob Ltd [distance 1.654360 km, version 2.110000, latency 12 ms]
+Server: London lon.speedtest.clouvider.net:8080 by Clouvider Ltd [distance 1.654360 km, version 2.110000, latency 11 ms]
+Server: London speedtest-thn.krystal.uk:8080 by Krystal Hosting [distance 1.654360 km, version 2.110000, latency 11 ms]
+Server: London speed.uk.lon.m247.ro:8080 by M247 Ltd [distance 1.654360 km, version 2.110000, latency 26 ms]
+.
+Server (closest): London speedlon.hyperoptic.com:8080 by Hyperoptic Limited (0.190066 km distance)
+Latency: 11 ms, Jitter: 5 ms
+Determining line type (2): ........
+Prespeed: 4.86 Mbit/s
+Buffering-lover line type detected: profile selected narrowband
+Testing download speed (2) ........
+Download: 5.00 Mbit/s
+Testing upload speed (2) ......
+Upload: 3.26 Mbit/s
+
+// -----------------------------------------------------------------------------------------------
+
+UP
+Wifi configure external antenna
+Wifi connecting (xxxxxxxx) ..... connected (-50 dbm) ... allocated (192.168.0.162)
+Wifi ssid=xxxxxxxx, bssid=xx:xx:xx:61:3B:49, protocol=802.11bgnax, bandwidth=20Mhz, channel=11, country=GB , txpower=80, rssi=-50
+Time ...
+Time OK
+Client: Address "xx.xx.xx.xx", Provider "Virgin Media Limited", Location (51.508530, -0.125740)
+Server (specified): speedtest.local:8080
+Latency: 5 ms, Jitter: 5 ms
+Determining line type (2): ............
+Prespeed: 7.71 Mbit/s
+Buffering-lover line type detected: profile selected narrowband
+Testing download speed (2) ..........
+Download: 7.24 Mbit/s
+Testing upload speed (2) ..........
+Upload: 6.57 Mbit/s
+
+// -----------------------------------------------------------------------------------------------
