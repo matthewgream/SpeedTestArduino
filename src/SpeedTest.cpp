@@ -312,8 +312,8 @@ void SpeedTest::sortServersByDistance (const ClientInfo &ipInfo) {
 const ServerInfo SpeedTest::selectBestServer (const int sample_size, const cbFn &cb) {
     int samples_found = 0;
     ServerInfo bestServer = mServerList [0];
-    long latency = INT_MAX;
-    for (auto &server : mServerList) {
+    long latency = LONG_MAX;
+    for (const auto &server : mServerList) {
         if (server.version == 0.0) {
             if (cb)
                 cb (false);
