@@ -29,11 +29,11 @@
 static inline constexpr float EARTH_RADIUS_KM = 6371.0;
 
 template <typename T>
-static inline constexpr T deg2rad (T n) {
+static inline constexpr T deg2rad (const T n) {
     return (n * M_PI / 180);
 }
 template <typename T>
-static inline constexpr T harversine (std::pair<T, T> n1, std::pair<T, T> n2) {
+static inline constexpr T harversine (const std::pair<T, T> n1, const std::pair<T, T> n2) {
     const T lat1r = deg2rad (n1.first), lon1r = deg2rad (n1.second);
     const T lat2r = deg2rad (n2.first), lon2r = deg2rad (n2.second);
     const T u = std::sin ((lat2r - lat1r) / 2), v = std::sin ((lon2r - lon1r) / 2);
@@ -91,23 +91,19 @@ bool SpeedTestClient::ping (long &millisec) {
 bool SpeedTestClient::download (const size_t total_size, const size_t buff_size, long &millisec) {
     if (! writeLine (String ("DOWNLOAD ") + String (total_size)))
         return false;
-    uint8_t *buff = new uint8_t [buff_size];
-    if (buff == nullptr)
+    auto buff = std::unique_ptr<uint8_t []> (new uint8_t [buff_size]);
+    if (! buff)
         return false;
     const auto start = std::chrono::steady_clock::now ();
     size_t recv_size = 0;
     while (recv_size < total_size) {
         const size_t left_size = std::min (buff_size, total_size - recv_size);
-        if (! read (buff, left_size))
-            goto download_fail;
+        if (! read (buff.get (), left_size))
+            return false;
         recv_size += left_size;
     }
     millisec = std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::steady_clock::now () - start).count ();
-    delete [] buff;
     return true;
-download_fail:
-    delete [] buff;
-    return false;
 }
 
 bool SpeedTestClient::upload (const size_t total_size, const size_t buff_size, long &millisec) {
@@ -116,7 +112,7 @@ bool SpeedTestClient::upload (const size_t total_size, const size_t buff_size, l
     const String command = String ("UPLOAD ") + String (total_size) + "\n";
     if (! writeLine (command))
         return false;
-    uint8_t *buff = new uint8_t [buff_size];
+    auto buff = std::unique_ptr<uint8_t []> (new uint8_t [buff_size]);
     for (size_t i = 0; i < buff_size; i++)
         buff [i] = static_cast<uint8_t> (rand () % 256);
     const auto start = std::chrono::steady_clock::now ();
@@ -124,26 +120,22 @@ bool SpeedTestClient::upload (const size_t total_size, const size_t buff_size, l
     while (send_size < total_size) {
         const size_t left_size = total_size - send_size;
         if (left_size > buff_size) {
-            if (! write (buff, buff_size))
-                goto upload_fail;
+            if (! write (buff.get (), buff_size))
+                return false;
             send_size += buff_size;
         } else {
             buff [left_size - 1] = '\n';
-            if (! write (buff, left_size))
-                goto upload_fail;
+            if (! write (buff.get (), left_size))
+                return false;
             send_size += left_size;
         }
     }
     if (! readLine (reply) || ! reply.startsWith ("OK ") || (offset = reply.indexOf (' ')) < 0) {
         Serial.printf ("upload faulty response: %s\n", reply.c_str ());
-        goto upload_fail;
+        return false;
     }
     millisec = std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::steady_clock::now () - start).count ();
-    delete [] buff;
     return reply.substring (offset + 1, reply.indexOf (' ', offset + 1)).toInt () == total_size;
-upload_fail:
-    delete [] buff;
-    return false;
 }
 
 float SpeedTestClient::version () const {
@@ -201,9 +193,7 @@ bool SpeedTestClient::readLine (String &buffer, const int timeout) {
 bool SpeedTestClient::writeLine (const String &buffer) {
     if (! mClient.connected ())
         return false;
-    if (buffer.length () == 0)
-        return false;
-    if (mClient.write (buffer.c_str ()) != buffer.length ())
+    if (buffer.length () == 0 || mClient.write (buffer.c_str ()) != buffer.length ())
         return false;
     if (buffer.indexOf ('\n') < 0 && mClient.write ("\n") != 1)
         return false;
@@ -213,7 +203,8 @@ bool SpeedTestClient::writeLine (const String &buffer) {
 // -----------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------
 
-SpeedTest::SpeedTest (float minServerVersion) : mMinSupportedServer (minServerVersion) {
+SpeedTest::SpeedTest (const float minServerVersion) :
+    mMinSupportedServer (minServerVersion) {
 }
 
 bool SpeedTest::identifyClient (const String &url) {
@@ -223,7 +214,7 @@ bool SpeedTest::identifyClient (const String &url) {
     client.begin (url);
     int code;
     if ((code = client.GET ()) != HTTP_CODE_OK) {
-        Serial.printf ("clientInfo: HTTP GET error-code=%d\n", code);
+        Serial.printf ("identifyClient: HTTP GET error-code=%d\n", code);
         return false;
     }
     JsonDocument json;
@@ -247,6 +238,7 @@ bool SpeedTest::identifyClient (const String &url) {
 void SpeedTest::insertServer (const ServerInfo &server) {
     mServerList.push_back (server);
 }
+
 bool SpeedTest::fetchServers (const String &url) {
     HTTPClient client;
     client.setUserAgent (SPEED_TEST_USER_AGENT);
@@ -255,7 +247,6 @@ bool SpeedTest::fetchServers (const String &url) {
     int code;
     if ((code = client.GET ()) != HTTP_CODE_OK) {
         Serial.printf ("fetchServers: HTTP GET error-code=%d\n", code);
-        client.end ();
         return false;
     }
     TinyXML xml;
@@ -265,28 +256,28 @@ bool SpeedTest::fetchServers (const String &url) {
     __xml_parse_serverInfo = ServerInfo ();
     __xml_parse_speedTest = this;
     xml.init (buffer, sizeof (buffer), [] (uint8_t flags, char *name, uint16_t nameLen, char *data, uint16_t dataLen) {
-        if (name != nullptr && data != nullptr) {
-            if (strcasecmp (name, "url") == 0) {
-                if (! __xml_parse_serverInfo.url.isEmpty ())
-                    __xml_parse_speedTest->insertServer (__xml_parse_serverInfo);
-                __xml_parse_serverInfo = ServerInfo { .url = String (data) };
-            } else if (strcasecmp (name, "lat") == 0)
-                __xml_parse_serverInfo.lat = String (data).toFloat ();
-            else if (strcasecmp (name, "lon") == 0)
-                __xml_parse_serverInfo.lon = String (data).toFloat ();
-            else if (strcasecmp (name, "name") == 0)
-                __xml_parse_serverInfo.name = String (data);
-            else if (strcasecmp (name, "country") == 0)
-                __xml_parse_serverInfo.country = String (data);
-            else if (strcasecmp (name, "cc") == 0)
-                __xml_parse_serverInfo.country_code = String (data);
-            else if (strcasecmp (name, "host") == 0)
-                __xml_parse_serverInfo.host = String (data);
-            else if (strcasecmp (name, "id") == 0)
-                __xml_parse_serverInfo.id = String (data).toInt ();
-            else if (strcasecmp (name, "sponsor") == 0)
-                __xml_parse_serverInfo.sponsor = String (data);
-        }
+        if (name == nullptr || data == nullptr)
+            return;
+        if (strcasecmp (name, "url") == 0) {
+            if (! __xml_parse_serverInfo.url.isEmpty ())
+                __xml_parse_speedTest->insertServer (__xml_parse_serverInfo);
+            __xml_parse_serverInfo = ServerInfo { .url = String (data) };
+        } else if (strcasecmp (name, "lat") == 0)
+            __xml_parse_serverInfo.lat = String (data).toFloat ();
+        else if (strcasecmp (name, "lon") == 0)
+            __xml_parse_serverInfo.lon = String (data).toFloat ();
+        else if (strcasecmp (name, "name") == 0)
+            __xml_parse_serverInfo.name = String (data);
+        else if (strcasecmp (name, "country") == 0)
+            __xml_parse_serverInfo.country = String (data);
+        else if (strcasecmp (name, "cc") == 0)
+            __xml_parse_serverInfo.country_code = String (data);
+        else if (strcasecmp (name, "host") == 0)
+            __xml_parse_serverInfo.host = String (data);
+        else if (strcasecmp (name, "id") == 0)
+            __xml_parse_serverInfo.id = String (data).toInt ();
+        else if (strcasecmp (name, "sponsor") == 0)
+            __xml_parse_serverInfo.sponsor = String (data);
     });
     auto &stream = client.getStream ();
     while (stream.available ())
@@ -354,26 +345,30 @@ bool SpeedTest::uploadSpeed (const String &server, const TestConfig &config, dou
     return true;
 }
 
-bool SpeedTest::latencyAndJitter (const String &server, long &latency, long &jitter, const int sample) {
+bool SpeedTest::latency (const String &server, long &latency, long &jitter, const int sample_size, const cbFn &cb) {
     auto client = SpeedTestClient (server);
     long previous_latency = LONG_MAX, minimum_latency = LONG_MAX;
     double current_jitter = 0;
     if (! client.connect ())
         return false;
-    for (int i = 0; i < sample; i++) {
+    for (int i = 0; i < sample_size; i++) {
+        bool result = false;
         long current_latency = 0;
-        if (! client.ping (current_latency))
-            return false;
-        if (current_latency < minimum_latency)
-            minimum_latency = current_latency;
-        if (previous_latency == LONG_MAX)
-            previous_latency = current_latency;
-        else
-            current_jitter += std::abs (previous_latency - current_latency);
+        if (client.ping (current_latency)) {
+            if (current_latency < minimum_latency)
+                minimum_latency = current_latency;
+            if (previous_latency == LONG_MAX)
+                previous_latency = current_latency;
+            else
+                current_jitter += std::abs (previous_latency - current_latency);
+            result = true;
+        }
+        if (cb)
+            cb (result);
     }
     client.close ();
     latency = minimum_latency;
-    jitter = (long) std::floor (current_jitter / sample);
+    jitter = (long) std::floor (current_jitter / sample_size);
     return true;
 }
 
@@ -390,7 +385,7 @@ double SpeedTest::execute (const String &server, const TestConfig &config, const
             if (client.connect ()) {
                 auto start = std::chrono::steady_clock::now ();
                 std::vector<double> partial_results;
-                while (curr_size < max_size) {
+                while (curr_size < max_size && std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::steady_clock::now () - start).count () < config.min_test_time_ms) {
                     long op_time = 0;
                     bool result = false;
                     if ((client.*op) (curr_size, config.buff_size, op_time)) {
@@ -400,8 +395,6 @@ double SpeedTest::execute (const String &server, const TestConfig &config, const
                     if (cb)
                         cb (result);
                     curr_size += incr_size;
-                    if (std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::steady_clock::now () - start).count () > config.min_test_time_ms)
-                        break;
                 }
                 client.close ();
                 std::sort (partial_results.begin (), partial_results.end ());
@@ -415,9 +408,9 @@ double SpeedTest::execute (const String &server, const TestConfig &config, const
                     iter++;
                     real_sum += (*it);
                 }
-                mtx.lock ();
+
+                const std::lock_guard<std::mutex> lock (mtx);
                 overall_speed += (real_sum / iter);
-                mtx.unlock ();
             } else {
                 if (cb)
                     cb (false);
@@ -431,7 +424,7 @@ double SpeedTest::execute (const String &server, const TestConfig &config, const
 // -----------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------
 
-const TestConfig preflightConfigDownload = {
+const TestConfig preflightConfig = {
     600000,     // start_size
     2000000,    // max_size
     125000,     // inc_size
@@ -513,6 +506,7 @@ const TestConfig fibreConfigUpload = {
     12,          // concurrency
     "Fibre / Lan line type detected: profile selected fibre"
 };
+
 void testConfigSelector (const double preSpeed, TestConfig &uploadConfig, TestConfig &downloadConfig) {
     uploadConfig = slowConfigUpload, downloadConfig = slowConfigDownload;
     if (preSpeed > 4 && preSpeed <= 30)
@@ -526,15 +520,19 @@ void testConfigSelector (const double preSpeed, TestConfig &uploadConfig, TestCo
 // -----------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------
 
-int speedTest (const String &server_specified) {
+bool speedTest (const String &server_specified) {
+
+    auto progressCallback = [] (bool success) {
+        Serial.printf ("%c", success ? '.' : '*');
+    };
 
     auto sp = SpeedTest (SPEED_TEST_MIN_SERVER_VERSION);
 
     //
 
-    if (! sp.identifyClient ()) {
+    if (! sp.identifyClient (SPEED_TEST_IP_INFO_API_URL)) {
         Serial.printf ("Unable to retrieve Client info. Try again later\n");
-        return EXIT_FAILURE;
+        return false;
     }
     const auto clientInfo = sp.clientInfo ();
     Serial.printf ("Client: Address \"%s\", Provider \"%s\", Location (%f, %f)\n", clientInfo.address.c_str (), clientInfo.isp.c_str (), clientInfo.lat, clientInfo.lon);
@@ -543,17 +541,14 @@ int speedTest (const String &server_specified) {
 
     String server;
     if (server_specified.isEmpty ()) {
-        if (! sp.fetchServers ()) {
+        if (! sp.fetchServers (SPEED_TEST_SERVER_LIST_URL)) {
             Serial.printf ("Unable to retrieve Server list. Try again later\n");
-            return EXIT_FAILURE;
+            return false;
         }
         Serial.printf ("%d Servers online\n", sp.numServers ());
         sp.sortServersByDistance (clientInfo);
-        const auto serverInfo = sp.selectBestServer (10, [] (bool success) {
-            Serial.printf ("%c", success ? '.' : '*');
-        });
-        Serial.printf ("\n");
-        Serial.printf ("Server (closest): %s %s by %s (%f km distance)\n", serverInfo.name.c_str (), serverInfo.host.c_str (), serverInfo.sponsor.c_str (), serverInfo.distance);
+        const auto serverInfo = sp.selectBestServer (SPEED_TEST_SERVER_SELECT_SAMPLE, progressCallback);
+        Serial.printf ("\nServer (closest): %s %s by %s (%f km distance)\n", serverInfo.name.c_str (), serverInfo.host.c_str (), serverInfo.sponsor.c_str (), serverInfo.distance);
         server = serverInfo.host;
     } else {
         sp.insertServer ({ .host = server_specified });
@@ -564,62 +559,49 @@ int speedTest (const String &server_specified) {
     //
 
     long latency = 0, jitter = 0;
-    if (sp.latencyAndJitter (server, latency, jitter))
-        Serial.printf ("Latency: %lu ms, Jitter: %lu ms\n", latency, jitter);
-    else
-        Serial.printf ("Latency: unavailable, Jitter: unavailable\n");
+    Serial.printf ("Testing latency/jitter ");
+    if (! sp.latency (server, latency, jitter, SPEED_TEST_LATENCY_SAMPLE_SIZE, progressCallback)) {
+        Serial.printf ("Latency/Jitter: test failed\n");
+        return false;
+    }
+    Serial.printf ("\nLatency: %lu ms, Jitter: %lu ms\n", latency, jitter);
 
     //
 
-    Serial.printf ("Determining line type (%d): ", preflightConfigDownload.concurrency);
     double preSpeed = 0;
-    if (sp.downloadSpeed (server, preflightConfigDownload, preSpeed, [] (bool success) {
-            Serial.printf ("%c", success ? '.' : '*');
-        })) {
-        Serial.printf ("\n");
-        Serial.printf ("Prespeed: %.2f Mbit/s\n", preSpeed);
-    } else {
-        Serial.printf ("\n");
-        Serial.printf ("Prespeed test failed\n");
-        return EXIT_FAILURE;
+    Serial.printf ("Determining line type (%d): ", preflightConfig.concurrency);
+    if (! sp.downloadSpeed (server, preflightConfig, preSpeed, progressCallback)) {
+        Serial.printf ("\nPreflight test failed\n");
+        return false;
     }
+    Serial.printf ("\nPreflight: %.2f Mbit/s\n", preSpeed);
     TestConfig uploadConfig, downloadConfig;
     testConfigSelector (preSpeed, uploadConfig, downloadConfig);
     Serial.printf ("%s\n", downloadConfig.label.c_str ());
 
     //
 
-    Serial.printf ("Testing download speed (%d) ", downloadConfig.concurrency);
     double downloadSpeed = 0;
-    if (sp.downloadSpeed (server, downloadConfig, downloadSpeed, [] (bool success) {
-            Serial.printf ("%c", success ? '.' : '*');
-        })) {
-        Serial.printf ("\n");
-        Serial.printf ("Download: %.2f Mbit/s\n", downloadSpeed);
-    } else {
-        Serial.printf ("\n");
-        Serial.printf ("Download test failed\n");
-        return EXIT_FAILURE;
+    Serial.printf ("Testing download speed (%d) ", downloadConfig.concurrency);
+    if (! sp.downloadSpeed (server, downloadConfig, downloadSpeed, progressCallback)) {
+        Serial.printf ("\nDownload test failed\n");
+        return false;
     }
+    Serial.printf ("\nDownload: %.2f Mbit/s\n", downloadSpeed);
 
     //
 
-    Serial.printf ("Testing upload speed (%d) ", uploadConfig.concurrency);
     double uploadSpeed = 0;
-    if (sp.uploadSpeed (server, uploadConfig, uploadSpeed, [] (bool success) {
-            Serial.printf ("%c", success ? '.' : '*');
-        })) {
-        Serial.printf ("\n");
-        Serial.printf ("Upload: %.2f Mbit/s\n", uploadSpeed);
-    } else {
-        Serial.printf ("\n");
-        Serial.printf ("Upload test failed\n");
-        return EXIT_FAILURE;
+    Serial.printf ("Testing upload speed (%d) ", uploadConfig.concurrency);
+    if (! sp.uploadSpeed (server, uploadConfig, uploadSpeed, progressCallback)) {
+        Serial.printf ("\nUpload test failed\n");
+        return false;
     }
+    Serial.printf ("\nUpload: %.2f Mbit/s\n", uploadSpeed);
 
     //
 
-    return EXIT_SUCCESS;
+    return true;
 }
 
 // -----------------------------------------------------------------------------------------------

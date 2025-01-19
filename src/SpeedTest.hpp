@@ -47,14 +47,14 @@ struct TestConfig {
 
 // -----------------------------------------------------------------------------------------------
 
-#define SPEED_TEST_USER_AGENT           "ESP32-SpeedTest/1.0 (Arduino; ESP32) LibWiFiClient/1.0"
-#define SPEED_TEST_SERVER_LIST_URL      "https://www.speedtest.net/speedtest-servers.php"
-#define SPEED_TEST_IP_INFO_API_URL      "https://api.ipapi.is/"
-#define SPEED_TEST_MIN_SERVER_VERSION   2.3
-#define SPEED_TEST_LATENCY_SAMPLE_SIZE  80
-#define SPEED_TEST_LATENCY_EVAL_SIZE    20
-#define SPEED_TEST_TIMEOUT_READ_DEFAULT 30
-#define SPEED_TEST_SERVER_SELECT_SAMPLE 10
+static inline constexpr const char* SPEED_TEST_USER_AGENT = "ESP32-SpeedTest/1.0 (Arduino; ESP32) LibWiFiClient/1.0";
+static inline constexpr const char* SPEED_TEST_SERVER_LIST_URL = "https://www.speedtest.net/speedtest-servers.php";
+static inline constexpr const char* SPEED_TEST_IP_INFO_API_URL = "https://api.ipapi.is/";
+static inline constexpr float SPEED_TEST_MIN_SERVER_VERSION = 2.3;
+static inline constexpr int SPEED_TEST_LATENCY_SAMPLE_SIZE = 80;
+static inline constexpr int SPEED_TEST_LATENCY_EVAL_SIZE = 20;
+static inline constexpr int SPEED_TEST_TIMEOUT_READ_DEFAULT = 30;
+static inline constexpr int SPEED_TEST_SERVER_SELECT_SAMPLE = 10;
 
 // -----------------------------------------------------------------------------------------------
 
@@ -84,25 +84,25 @@ private:
 
 // -----------------------------------------------------------------------------------------------
 
-class SpeedTest  {
+class SpeedTest {
 public:
     typedef bool (SpeedTestClient::*opFn) (const size_t total_size, const size_t buff_size, long &millisec);
     using cbFn = std::function<void (bool)>;
 
-    explicit SpeedTest (float minServerVersion);
+    explicit SpeedTest (const float minServerVersion);
 
     const ClientInfo &clientInfo () const { return mClientInfo; }
-    bool identifyClient (const String &url = SPEED_TEST_IP_INFO_API_URL);
+    bool identifyClient (const String &url);
 
     void insertServer (const ServerInfo &server);
     size_t numServers () const { return mServerList.size (); }
-    bool fetchServers (const String &url = SPEED_TEST_SERVER_LIST_URL);
+    bool fetchServers (const String &url);
     void sortServersByDistance (const ClientInfo &info);
-    const ServerInfo selectBestServer (const int sample_size = SPEED_TEST_SERVER_SELECT_SAMPLE, const cbFn &cb = nullptr);
+    const ServerInfo selectBestServer (const int sample_size, const cbFn &cb = nullptr);
 
     bool downloadSpeed (const String &server, const TestConfig &config, double &result, const cbFn &cb = nullptr);
     bool uploadSpeed (const String &server, const TestConfig &config, double &result, const cbFn &cb = nullptr);
-    bool latencyAndJitter (const String &server, long &latency, long &jitter, const int sample = SPEED_TEST_LATENCY_SAMPLE_SIZE);
+    bool latency (const String &server, long &latency, long &jitter, const int sample_size, const cbFn &cb = nullptr);
 
 private:
     double execute (const String &server, const TestConfig &config, const opFn &fnc, const cbFn &cb = nullptr);
@@ -115,7 +115,7 @@ private:
 // -----------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------
 
-extern int speedTest (const String &server = String ());
+extern bool speedTest (const String &server = String ());
 
 // -----------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------

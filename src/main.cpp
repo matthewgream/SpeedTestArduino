@@ -1,5 +1,4 @@
 
-
 // -----------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------
 
@@ -31,7 +30,6 @@ void startWiFi (const char *ssid, const char *pass) {
         digitalWrite (GPIO_NUM_14, HIGH);    // Use external antenna
     }
 #endif
-    Serial.printf ("Wifi connecting (%s) ...", ssid);
     WiFi.setHostname ("SpeedTest");
     WiFi.setAutoReconnect (true);
     WiFi.useStaticBuffers (true);
@@ -39,6 +37,8 @@ void startWiFi (const char *ssid, const char *pass) {
     WiFi.setTxPower (WIFI_POWER_21dBm);    // Maximum
     esp_wifi_set_ps (WIFI_PS_NONE);
     WiFi.mode (WIFI_MODE_STA);
+    //
+    Serial.printf ("Wifi connecting (%s) ...", ssid);
     WiFi.begin (ssid, pass);
     while (WiFi.status () != WL_CONNECTED)
         delay (500), Serial.printf (".");
@@ -86,8 +86,8 @@ void setup () {
     startWiFi (WIFI_SSID, WIFI_PASS);
     startTime ();
     //
-    speedTest (SPEEDTEST_SERVER);
-    // speedTest();
+    // speedTest (SPEEDTEST_SERVER);
+    speedTest ();
 }
 
 void loop () {
