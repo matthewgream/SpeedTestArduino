@@ -568,15 +568,15 @@ bool speedTest (const String &server_specified) {
 
     //
 
-    double preSpeed = 0;
+    double preflightSpeed = 0;
     Serial.printf ("Determining line type (%d): ", preflightConfig.concurrency);
-    if (! sp.downloadSpeed (server, preflightConfig, preSpeed, progressCallback)) {
+    if (! sp.downloadSpeed (server, preflightConfig, preflightSpeed, progressCallback)) {
         Serial.printf ("\nPreflight test failed\n");
         return false;
     }
-    Serial.printf ("\nPreflight: %.2f Mbit/s\n", preSpeed);
+    Serial.printf ("\nPreflight: %.2f Mbit/s\n", preflightSpeed);
     TestConfig uploadConfig, downloadConfig;
-    testConfigSelector (preSpeed, uploadConfig, downloadConfig);
+    testConfigSelector (preflightSpeed, uploadConfig, downloadConfig);
     Serial.printf ("%s\n", downloadConfig.label.c_str ());
 
     //
