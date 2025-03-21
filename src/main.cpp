@@ -41,9 +41,16 @@ static String _protocol_to_string (const uint8_t p) {
             r += (r.isEmpty () ? "" : "/") + protocol.name;
     return "802.11" + r;
 }
-
 static String _bandwidth_to_string (const uint8_t b) {
     return String ((b >= 1 && b <= 5) ? std::min (160, 20 * (1 << (b - 1))) : 0) + "Mhz";
+}
+static String _channel_to_string (const uint8_t c, const wifi_second_chan_t s) {
+    return String (c) + (s == WIFI_SECOND_CHAN_ABOVE ? "/+" : (s == WIFI_SECOND_CHAN_BELOW ? "/-" : ""));
+}
+static String _country_to_string (const wifi_country_t c) {
+    String r (c.cc, 3);
+    r.trim ();
+    return r;
 }
 
 void startWiFi (const char *ssid, const char *pass) {
@@ -91,8 +98,8 @@ void startWiFi (const char *ssid, const char *pass) {
                    WiFi.BSSIDstr ().c_str (),
                    String (esp_wifi_get_protocol (WIFI_IF_STA, &protocol) == ESP_OK ? _protocol_to_string (protocol) : "n/a").c_str (),
                    String (esp_wifi_get_bandwidth (WIFI_IF_STA, &bandwidth) == ESP_OK ? _bandwidth_to_string (bandwidth) : "n/a").c_str (),
-                   String (esp_wifi_get_channel (&channel, &second) == ESP_OK ? String (channel) + (second == WIFI_SECOND_CHAN_ABOVE ? "/+" : (second == WIFI_SECOND_CHAN_BELOW ? "/-" : "")) : "n/a").c_str (),
-                   String (esp_wifi_get_country (&country) == ESP_OK ? String (country.cc, 3) : "n/a").c_str (),
+                   String (esp_wifi_get_channel (&channel, &second) == ESP_OK ? _channel_to_string (channel, second) : "n/a").c_str (),
+                   String (esp_wifi_get_country (&country) == ESP_OK ? _country_to_string (country) : "n/a").c_str (),
                    WiFi.getTxPower (),
                    WiFi.RSSI ());
 }
@@ -109,11 +116,20 @@ void startTime () {
 // -----------------------------------------------------------------------------------------------
 
 #include "SpeedTest.hpp"
-#if !defined (WIFI_SSID) || !defined (WIFI_PASS)
+#if ! defined(WIFI_SSID) || ! defined(WIFI_PASS)
 #include "Secrets.hpp"
 #endif
 
 #define SPEEDTEST_SERVER "speedtest.local:8080"
+// #define SPEEDTEST_PROFILE SpeedTestProfile::SLOW
+const SpeedTestConfig speedTestConfig {
+#ifdef SPEEDTEST_SERVER
+    {  SpeedTestConfigType::SERVER,  SPEEDTEST_SERVER },
+#endif
+#ifdef SPEEDTEST_PROFILE
+    { SpeedTestConfigType::PROFILE, SPEEDTEST_PROFILE },
+#endif
+};
 
 void setup () {
     delay (5 * 1000);
@@ -121,9 +137,7 @@ void setup () {
     Serial.println ("UP");
     startWiFi (WIFI_SSID, WIFI_PASS);
     startTime ();
-    //
-    // speedTest (SPEEDTEST_SERVER);
-    speedTest ();
+    speedTest (speedTestConfig);
 }
 
 void loop () {

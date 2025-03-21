@@ -520,24 +520,47 @@ const TestConfig fibreConfigUpload = {
     "Fibre / Lan line type detected: profile selected fibre"
 };
 
-void testConfigSelector (const double preSpeed, TestConfig &uploadConfig, TestConfig &downloadConfig) {
-    uploadConfig = slowConfigUpload, downloadConfig = slowConfigDownload;
-    if (preSpeed > 4 && preSpeed <= 30)
+bool testConfigSelector (const String &profile, TestConfig &uploadConfig, TestConfig &downloadConfig) {
+    if (profile == SpeedTestProfile::PREFLIGHT)
+        uploadConfig = preflightConfig, downloadConfig = preflightConfig;
+    else if (profile == SpeedTestProfile::SLOW)
+        uploadConfig = slowConfigUpload, downloadConfig = slowConfigDownload;
+    else if (profile == SpeedTestProfile::NARROWBAND)
         downloadConfig = narrowConfigDownload, uploadConfig = narrowConfigUpload;
-    else if (preSpeed > 30 && preSpeed < 150)
+    else if (profile == SpeedTestProfile::BROADBAND)
         downloadConfig = broadbandConfigDownload, uploadConfig = broadbandConfigUpload;
-    else if (preSpeed >= 150)
+    else if (profile == SpeedTestProfile::FIBRE)
         downloadConfig = fibreConfigDownload, uploadConfig = fibreConfigUpload;
+    else
+        return false;
+    return true;
+}
+String testProfileSelector (const double preSpeed) {
+    if (preSpeed <= 4)
+        return SpeedTestProfile::SLOW;
+    if (preSpeed > 4 && preSpeed <= 30)
+        return SpeedTestProfile::NARROWBAND;
+    else if (preSpeed > 30 && preSpeed < 150)
+        return SpeedTestProfile::BROADBAND;
+    else if (preSpeed >= 150)
+        return SpeedTestProfile::FIBRE;
+    /*NOT_REACHED*/
+    return {};
 }
 
 // -----------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------
 
-bool speedTest (const String &server_specified) {
+bool speedTest (const SpeedTestConfig &config) {
 
     auto progressCallback = [] (bool success) {
         Serial.printf ("%c", success ? '.' : '*');
     };
+
+    String configOptions;
+    for (auto &[name, value] : config)
+        configOptions += (configOptions.isEmpty () ? "" : ", ") + name + "=" + value;
+    Serial.printf ("Config: %s\n", configOptions.c_str ());
 
     auto sp = SpeedTest (SPEED_TEST_MIN_SERVER_VERSION);
 
@@ -553,7 +576,7 @@ bool speedTest (const String &server_specified) {
     //
 
     String server;
-    if (server_specified.isEmpty ()) {
+    if (config.find ("server") == config.end ()) {
         if (! sp.fetchServers (SPEED_TEST_SERVER_LIST_URL)) {
             Serial.printf ("Unable to retrieve Server list. Try again later\n");
             return false;
@@ -564,6 +587,7 @@ bool speedTest (const String &server_specified) {
         Serial.printf ("\nServer (closest): %s %s by %s (%f km distance)\n", serverInfo.name.c_str (), serverInfo.host.c_str (), serverInfo.sponsor.c_str (), serverInfo.distance);
         server = serverInfo.host;
     } else {
+        const auto server_specified = config.at ("server");
         sp.insertServer ({ .host = server_specified });
         Serial.printf ("Server (specified): %s\n", server_specified.c_str ());
         server = server_specified;
@@ -581,15 +605,24 @@ bool speedTest (const String &server_specified) {
 
     //
 
-    double preflightSpeed = 0;
-    Serial.printf ("Determining line type (%d): ", preflightConfig.concurrency);
-    if (! sp.downloadSpeed (server, preflightConfig, preflightSpeed, progressCallback)) {
-        Serial.printf ("\nPreflight test failed\n");
-        return false;
-    }
-    Serial.printf ("\nPreflight: %.2f Mbit/s\n", preflightSpeed);
     TestConfig uploadConfig, downloadConfig;
-    testConfigSelector (preflightSpeed, uploadConfig, downloadConfig);
+    if (config.find ("profile") == config.end ()) {
+        double preflightSpeed = 0;
+        Serial.printf ("Determining line type (%d): ", preflightConfig.concurrency);
+        if (! sp.downloadSpeed (server, preflightConfig, preflightSpeed, progressCallback)) {
+            Serial.printf ("\nPreflight test failed\n");
+            return false;
+        }
+        const String profile = testProfileSelector (preflightSpeed);
+        Serial.printf ("\nPreflight: %.2f Mbit/s, qualifies as %s\n", preflightSpeed, profile.c_str ());
+        if (! testConfigSelector (profile, uploadConfig, downloadConfig))
+            return false;
+    } else {
+        const auto profile_specified = config.at ("profile");
+        Serial.printf ("Profile (specified): %s\n", profile_specified.c_str ());
+        if (! testConfigSelector (profile_specified, uploadConfig, downloadConfig))
+            return false;
+    }
     Serial.printf ("%s\n", downloadConfig.label.c_str ());
 
     //
