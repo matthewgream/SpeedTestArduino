@@ -490,7 +490,6 @@ const TestConfig broadbandConfigDownload = {
     20000,        // min_test_time_ms
     32,           // concurrency
     "Broadband line type detected: profile selected broadband"
-
 };
 const TestConfig broadbandConfigUpload = {
     1000000,     // start_size

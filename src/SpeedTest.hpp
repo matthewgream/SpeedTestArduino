@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <functional>
 #include <vector>
+#include <map>
 
 // -----------------------------------------------------------------------------------------------
 
@@ -137,22 +138,20 @@ private:
 // -----------------------------------------------------------------------------------------------
 
 struct SpeedTestProfile {
-    static inline constexpr const char* PREFLIGHT = "preflight";
-    static inline constexpr const char* SLOW = "slow";
-    static inline constexpr const char* NARROWBAND = "narrowband";
-    static inline constexpr const char* BROADBAND = "broadband";
-    static inline constexpr const char* FIBRE = "fibre";
+    static inline constexpr const char *PREFLIGHT = "preflight";
+    static inline constexpr const char *SLOW = "slow";
+    static inline constexpr const char *NARROWBAND = "narrowband";
+    static inline constexpr const char *BROADBAND = "broadband";
+    static inline constexpr const char *FIBRE = "fibre";
 };
-
-#include <map>
 
 using SpeedTestConfig = std::map<String, String>;
 struct SpeedTestConfigType {
-    static inline constexpr const char* SERVER = "server";
-    static inline constexpr const char* PROFILE = "profile";
+    static inline constexpr const char *SERVER = "server";
+    static inline constexpr const char *PROFILE = "profile";
 };
 
-extern bool speedTest (const SpeedTestConfig& config = {});
+extern bool speedTest (const SpeedTestConfig &config = {});
 
 // -----------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------
