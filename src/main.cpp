@@ -8,8 +8,40 @@
 #include "esp_wifi.h"
 
 static String _protocol_to_string (const uint8_t p) {
-    return "802.11" + String (p & WIFI_PROTOCOL_11B ? "b" : "") + (p & WIFI_PROTOCOL_11G ? "g" : "") + (p & WIFI_PROTOCOL_11N ? "n" : "") + (p & WIFI_PROTOCOL_LR ? "l" : "") + (p & WIFI_PROTOCOL_11AX ? "ax" : "");
+    struct ProtocolInfo {
+        uint8_t flag;
+        String name;
+    };
+    static const ProtocolInfo protocols [] = {
+#ifdef WIFI_PROTOCOL_11B
+        {  WIFI_PROTOCOL_11B,  "b" },
+#endif
+#ifdef WIFI_PROTOCOL_11G
+        {  WIFI_PROTOCOL_11G,  "g" },
+#endif
+#ifdef WIFI_PROTOCOL_11N
+        {  WIFI_PROTOCOL_11N,  "n" },
+#endif
+#ifdef WIFI_PROTOCOL_LR
+        {   WIFI_PROTOCOL_LR,  "l" },
+#endif
+#ifdef WIFI_PROTOCOL_11A
+        {  WIFI_PROTOCOL_11A,  "a" },
+#endif
+#ifdef WIFI_PROTOCOL_11AC
+        { WIFI_PROTOCOL_11AC, "ac" },
+#endif
+#ifdef WIFI_PROTOCOL_11AX
+        { WIFI_PROTOCOL_11AX, "ax" },
+#endif
+    };
+    String r;
+    for (const auto &protocol : protocols)
+        if (p & protocol.flag)
+            r += (r.isEmpty () ? "" : "/") + protocol.name;
+    return "802.11" + r;
 }
+
 static String _bandwidth_to_string (const uint8_t b) {
     return String ((b >= 1 && b <= 5) ? std::min (160, 20 * (1 << (b - 1))) : 0) + "Mhz";
 }
@@ -19,9 +51,10 @@ void startWiFi (const char *ssid, const char *pass) {
     cfg.ampdu_tx_enable = 1;
     cfg.ampdu_rx_enable = 1;
     cfg.nano_enable = 0;
+    cfg.nvs_enable = 0;
     ESP_ERROR_CHECK (esp_wifi_init (&cfg));
-#ifdef ARDUINO_VARIANT
-    if (strcmp (ARDUINO_VARIANT, "esp32c6") == 0 || strcmp (ARDUINO_VARIANT, "XIAO_ESP32C6") == 0) {
+#if defined(ARDUINO_VARIANT) && defined(WIFI_ANTENNA_EXTERNAL)
+    if (String (ARDUINO_VARIANT) == "esp32c6" || String (ARDUINO_VARIANT) == "XIAO_ESP32C6") {
         Serial.printf ("Wifi configure external antenna\n");
         pinMode (GPIO_NUM_3, OUTPUT);
         digitalWrite (GPIO_NUM_3, LOW);    // Activate RF switch control
@@ -34,6 +67,7 @@ void startWiFi (const char *ssid, const char *pass) {
     WiFi.setAutoReconnect (true);
     WiFi.useStaticBuffers (true);
     WiFi.setSleep (false);
+    // WiFi.setTxPower (WIFI_POWER_8_5dBm);    // XXX ?!? for AUTH_EXPIRE ... flash access problem ...  https://github.com/espressif/arduino-esp32/issues/2144
     WiFi.setTxPower (WIFI_POWER_21dBm);    // Maximum
     esp_wifi_set_ps (WIFI_PS_NONE);
     WiFi.mode (WIFI_MODE_STA);
@@ -43,7 +77,7 @@ void startWiFi (const char *ssid, const char *pass) {
     while (WiFi.status () != WL_CONNECTED)
         delay (500), Serial.printf (".");
     Serial.printf (" connected (%d dbm) ...", WiFi.RSSI ());
-    while (WiFi.localIP () == IPAddress (0, 0, 0, 0))
+    while (WiFi.localIP () == INADDR_NONE)
         delay (500), Serial.printf (".");
     Serial.printf (" allocated (%s)\n", WiFi.localIP ().toString ().c_str ());
     //
@@ -75,7 +109,9 @@ void startTime () {
 // -----------------------------------------------------------------------------------------------
 
 #include "SpeedTest.hpp"
+#if !defined (WIFI_SSID) || !defined (WIFI_PASS)
 #include "Secrets.hpp"
+#endif
 
 #define SPEEDTEST_SERVER "speedtest.local:8080"
 

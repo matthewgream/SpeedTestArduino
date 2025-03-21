@@ -47,9 +47,9 @@ struct TestConfig {
 
 // -----------------------------------------------------------------------------------------------
 
-static inline constexpr const char* SPEED_TEST_USER_AGENT = "ESP32-SpeedTest/1.0 (Arduino; ESP32) LibWiFiClient/1.0";
-static inline constexpr const char* SPEED_TEST_SERVER_LIST_URL = "https://www.speedtest.net/speedtest-servers.php";
-static inline constexpr const char* SPEED_TEST_IP_INFO_API_URL = "https://api.ipapi.is/";
+static inline constexpr const char *SPEED_TEST_USER_AGENT = "ESP32-SpeedTest/1.0 (Arduino; ESP32) LibWiFiClient/1.0";
+static inline constexpr const char *SPEED_TEST_SERVER_LIST_URL = "https://www.speedtest.net/speedtest-servers.php";
+static inline constexpr const char *SPEED_TEST_IP_INFO_API_URL = "https://api.ipapi.is/";
 static inline constexpr float SPEED_TEST_MIN_SERVER_VERSION = 2.3;
 static inline constexpr int SPEED_TEST_LATENCY_SAMPLE_SIZE = 80;
 static inline constexpr int SPEED_TEST_LATENCY_EVAL_SIZE = 20;
@@ -57,6 +57,15 @@ static inline constexpr int SPEED_TEST_TIMEOUT_READ_DEFAULT = 30;
 static inline constexpr int SPEED_TEST_SERVER_SELECT_SAMPLE = 10;
 
 // -----------------------------------------------------------------------------------------------
+
+struct SpeedTestStats {
+    size_t bytesTransmitted = 0, bytesReceived = 0;
+    SpeedTestStats &operator+= (const SpeedTestStats &other) {
+        bytesTransmitted += other.bytesTransmitted;
+        bytesReceived += other.bytesReceived;
+        return *this;
+    }
+};
 
 class SpeedTestClient {
 public:
@@ -71,10 +80,16 @@ public:
     const std::pair<String, uint16_t> hostport () const;
     void close ();
 
+    using Stats = SpeedTestStats;
+    const Stats &stats () const {
+        return mStats;
+    }
+
 private:
     String mServer;
     float mServerVersion;
     WiFiClient mClient;
+    Stats mStats;
 
     bool read (uint8_t *buffer, const size_t length, const int timeout = SPEED_TEST_TIMEOUT_READ_DEFAULT);
     bool write (const uint8_t *buffer, const size_t length);
@@ -104,12 +119,18 @@ public:
     bool uploadSpeed (const String &server, const TestConfig &config, double &result, const cbFn &cb = nullptr);
     bool latency (const String &server, long &latency, long &jitter, const int sample_size, const cbFn &cb = nullptr);
 
+    using Stats = SpeedTestStats;
+    const Stats &stats () const {
+        return mStats;
+    }
+
 private:
     double execute (const String &server, const TestConfig &config, const opFn &fnc, const cbFn &cb = nullptr);
 
     ClientInfo mClientInfo {};
     std::vector<ServerInfo> mServerList {};
     float mMinSupportedServer;
+    Stats mStats;
 };
 
 // -----------------------------------------------------------------------------------------------

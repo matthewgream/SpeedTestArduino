@@ -160,6 +160,7 @@ bool SpeedTestClient::read (uint8_t *buffer, const size_t length, const int time
             delay (5);
         }
         obtained += n;
+        mStats.bytesReceived += n;
     }
     return true;
 }
@@ -167,7 +168,12 @@ bool SpeedTestClient::read (uint8_t *buffer, const size_t length, const int time
 bool SpeedTestClient::write (const uint8_t *buffer, const size_t length) {
     if (! mClient.connected ())
         return false;
-    return length > 0 && mClient.write (buffer, length) == length;
+    if (length <= 0)
+        return false;
+    const size_t n = mClient.write (buffer, length);
+    if (n > 0)
+        mStats.bytesTransmitted += n;
+    return n == length;
 }
 
 bool SpeedTestClient::readLine (String &buffer, const int timeout) {
@@ -182,6 +188,7 @@ bool SpeedTestClient::readLine (String &buffer, const int timeout) {
                 return false;
             delay (5);
         }
+        mStats.bytesReceived += n;
         const char c = static_cast<char> (n);
         if (c == '\n' || c == '\r')
             break;
@@ -193,7 +200,12 @@ bool SpeedTestClient::readLine (String &buffer, const int timeout) {
 bool SpeedTestClient::writeLine (const String &buffer) {
     if (! mClient.connected ())
         return false;
-    if (buffer.length () == 0 || mClient.write (buffer.c_str ()) != buffer.length ())
+    if (buffer.length () == 0)
+        return false;
+    const size_t n = mClient.write (buffer.c_str ());
+    if (n > 0)
+        mStats.bytesTransmitted += n;
+    if (n != buffer.length ())
         return false;
     if (buffer.indexOf ('\n') < 0 && mClient.write ("\n") != 1)
         return false;
@@ -377,7 +389,7 @@ double SpeedTest::execute (const String &server, const TestConfig &config, const
     double overall_speed = 0;
     std::mutex mtx;
     for (int i = 0; i < config.concurrency; i++)
-        workers.push_back (std::thread ([&server, &overall_speed, &op, &config, &mtx, cb] () {
+        workers.push_back (std::thread ([this, &server, &overall_speed, &op, &config, &mtx, cb] () {
             const size_t max_size = config.max_size;
             const size_t incr_size = config.incr_size;
             size_t curr_size = config.start_size;
@@ -411,6 +423,7 @@ double SpeedTest::execute (const String &server, const TestConfig &config, const
 
                 const std::lock_guard<std::mutex> lock (mtx);
                 overall_speed += (real_sum / iter);
+                this->mStats += client.stats ();
             } else {
                 if (cb)
                     cb (false);
@@ -598,6 +611,9 @@ bool speedTest (const String &server_specified) {
         return false;
     }
     Serial.printf ("\nUpload: %.2f Mbit/s\n", uploadSpeed);
+
+    const auto stats = sp.stats ();
+    Serial.printf ("Stats: %.2fMb/%.2fMb transmitted/received\n", stats.bytesTransmitted / 1024.0 / 1024.0, stats.bytesReceived / 1024.0 / 1024.0);
 
     //
 
