@@ -120,7 +120,7 @@ void startTime () {
 #include "Secrets.hpp"
 #endif
 
-#define SPEEDTEST_SERVER "speedtest.local:8080"
+// #define SPEEDTEST_SERVER "speedtest.local:8080"
 // #define SPEEDTEST_PROFILE SpeedTestProfile::SLOW
 const SpeedTestConfig speedTestConfig {
 #ifdef SPEEDTEST_SERVER
