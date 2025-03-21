@@ -36,15 +36,7 @@ struct ServerInfo {
     float version;
 };
 
-struct TestConfig {
-    size_t start_size;
-    size_t max_size;
-    size_t incr_size;
-    size_t buff_size;
-    long min_test_time_ms;
-    int concurrency;
-    String label;
-};
+struct TestConfig;
 
 // -----------------------------------------------------------------------------------------------
 
@@ -67,6 +59,8 @@ struct SpeedTestStats {
         return *this;
     }
 };
+
+// -----------------------------------------------------------------------------------------------
 
 class SpeedTestClient {
 public:
@@ -116,8 +110,8 @@ public:
     void sortServersByDistance (const ClientInfo &info);
     const ServerInfo selectBestServer (const int sample_size, const cbFn &cb = nullptr);
 
-    bool downloadSpeed (const String &server, const TestConfig &config, double &result, const cbFn &cb = nullptr);
-    bool uploadSpeed (const String &server, const TestConfig &config, double &result, const cbFn &cb = nullptr);
+    bool downloadSpeed (const String &server, const TestConfig *config, double &result, const cbFn &cb = nullptr);
+    bool uploadSpeed (const String &server, const TestConfig *config, double &result, const cbFn &cb = nullptr);
     bool latency (const String &server, long &latency, long &jitter, const int sample_size, const cbFn &cb = nullptr);
 
     using Stats = SpeedTestStats;
@@ -126,7 +120,7 @@ public:
     }
 
 private:
-    double execute (const String &server, const TestConfig &config, const opFn &fnc, const cbFn &cb = nullptr);
+    double execute (const String &server, const TestConfig *config, const opFn &fnc, const cbFn &cb = nullptr);
 
     ClientInfo mClientInfo {};
     std::vector<ServerInfo> mServerList {};

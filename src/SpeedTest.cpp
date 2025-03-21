@@ -43,6 +43,19 @@ static inline constexpr T harversine (const std::pair<T, T> n1, const std::pair<
 // -----------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------
 
+struct TestConfig {
+    size_t start_size;
+    size_t max_size;
+    size_t incr_size;
+    size_t buff_size;
+    long min_test_time_ms;
+    int concurrency;
+    String label;
+};
+
+// -----------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------
+
 SpeedTestClient::SpeedTestClient (const String &server) :
     mServer (server),
     mServerVersion (-1.0) { }
@@ -347,12 +360,12 @@ const ServerInfo SpeedTest::selectBestServer (const int sample_size, const cbFn 
 
 //
 
-bool SpeedTest::downloadSpeed (const String &server, const TestConfig &config, double &result, const cbFn &cb) {
+bool SpeedTest::downloadSpeed (const String &server, const TestConfig *config, double &result, const cbFn &cb) {
     result = execute (server, config, &SpeedTestClient::download, cb);
     return true;
 }
 
-bool SpeedTest::uploadSpeed (const String &server, const TestConfig &config, double &result, const cbFn &cb) {
+bool SpeedTest::uploadSpeed (const String &server, const TestConfig *config, double &result, const cbFn &cb) {
     result = execute (server, config, &SpeedTestClient::upload, cb);
     return true;
 }
@@ -384,23 +397,23 @@ bool SpeedTest::latency (const String &server, long &latency, long &jitter, cons
     return true;
 }
 
-double SpeedTest::execute (const String &server, const TestConfig &config, const opFn &op, const cbFn &cb) {
+double SpeedTest::execute (const String &server, const TestConfig *config, const opFn &op, const cbFn &cb) {
     std::vector<std::thread> workers;
     double overall_speed = 0;
     std::mutex mtx;
-    for (int i = 0; i < config.concurrency; i++)
+    for (int i = 0; i < config->concurrency; i++)
         workers.push_back (std::thread ([this, &server, &overall_speed, &op, &config, &mtx, cb] () {
-            const size_t max_size = config.max_size;
-            const size_t incr_size = config.incr_size;
-            size_t curr_size = config.start_size;
+            const size_t max_size = config->max_size;
+            const size_t incr_size = config->incr_size;
+            size_t curr_size = config->start_size;
             auto client = SpeedTestClient (server);
             if (client.connect ()) {
                 auto start = std::chrono::steady_clock::now ();
                 std::vector<double> partial_results;
-                while (curr_size < max_size && std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::steady_clock::now () - start).count () < config.min_test_time_ms) {
+                while (curr_size < max_size && std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::steady_clock::now () - start).count () < config->min_test_time_ms) {
                     long op_time = 0;
                     bool result = false;
-                    if ((client.*op) (curr_size, config.buff_size, op_time)) {
+                    if ((client.*op) (curr_size, config->buff_size, op_time)) {
                         partial_results.push_back ((curr_size * 8) / (static_cast<double> (op_time) / 1000));
                         result = true;
                     }
@@ -608,7 +621,7 @@ bool speedTest (const SpeedTestConfig &config) {
     if (config.find ("profile") == config.end ()) {
         double preflightSpeed = 0;
         Serial.printf ("Determining line type (%d): ", preflightConfig.concurrency);
-        if (! sp.downloadSpeed (server, preflightConfig, preflightSpeed, progressCallback)) {
+        if (! sp.downloadSpeed (server, &preflightConfig, preflightSpeed, progressCallback)) {
             Serial.printf ("\nPreflight test failed\n");
             return false;
         }
@@ -628,7 +641,7 @@ bool speedTest (const SpeedTestConfig &config) {
 
     double downloadSpeed = 0;
     Serial.printf ("Testing download speed (%d) ", downloadConfig.concurrency);
-    if (! sp.downloadSpeed (server, downloadConfig, downloadSpeed, progressCallback)) {
+    if (! sp.downloadSpeed (server, &downloadConfig, downloadSpeed, progressCallback)) {
         Serial.printf ("\nDownload test failed\n");
         return false;
     }
@@ -638,7 +651,7 @@ bool speedTest (const SpeedTestConfig &config) {
 
     double uploadSpeed = 0;
     Serial.printf ("Testing upload speed (%d) ", uploadConfig.concurrency);
-    if (! sp.uploadSpeed (server, uploadConfig, uploadSpeed, progressCallback)) {
+    if (! sp.uploadSpeed (server, &uploadConfig, uploadSpeed, progressCallback)) {
         Serial.printf ("\nUpload test failed\n");
         return false;
     }
