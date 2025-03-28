@@ -2,10 +2,45 @@
 // -----------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------
 
+// #define USE_ETHERNET
+// #define USE_WIFI
+
+#if ! defined(USE_ETHERNET) && ! defined(USE_WIFI)
+#define USE_WIFI
+#endif
+
+// -----------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------
+
 #include <Arduino.h>
+#include <esp_pthread.h>
+
+void __esp32_specific_init () {
+    esp_pthread_cfg_t cfg;
+    esp_pthread_get_cfg (&cfg);
+    cfg.stack_size = 4096;
+    if (esp_pthread_set_cfg (&cfg) != ESP_OK)
+        Serial.println ("could not esp_pthread_set_cfg");
+}
+
+// -----------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------
+
+void startTime () {
+    Serial.println ("Time ...");
+    configTime (0, 0, "pool.ntp.org", "time.nist.gov", "time.google.com");
+    while (time (nullptr) < 3600 * 2)
+        delay (500);
+    Serial.println ("Time OK");
+}
+
+// -----------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------
+
+#ifdef USE_WIFI
 
 #include <WiFi.h>
-#include "esp_wifi.h"
+#include <esp_wifi.h>
 
 static String _protocol_to_string (const uint8_t p) {
     struct ProtocolInfo {
@@ -104,21 +139,64 @@ void startWiFi (const char *ssid, const char *pass) {
                    WiFi.RSSI ());
 }
 
-void startTime () {
-    Serial.println ("Time ...");
-    configTime (0, 0, "pool.ntp.org", "time.nist.gov", "time.google.com");
-    while (time (nullptr) < 3600 * 2)
-        delay (500);
-    Serial.println ("Time OK");
+#endif
+
+// -----------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------
+
+#ifdef USE_ETHERNET
+
+#include <ETH.h>
+
+#if defined(WAVESHARE_ESP32_S3_ETH)
+#define ETH_MISO_PIN 12
+#define ETH_MOSI_PIN 11
+#define ETH_SCLK_PIN 13
+#define ETH_CS_PIN   14
+#define ETH_INT_PIN  10
+#define ETH_RST_PIN  9
+#define ETH_ADDR     1
+#else
+#error "Ethernet board has not been specified"
+#endif
+
+void startEthernet () {
+    if (! ETH.begin (ETH_PHY_W5500, 1, ETH_CS_PIN, ETH_INT_PIN, ETH_RST_PIN, SPI3_HOST, ETH_SCLK_PIN, ETH_MISO_PIN, ETH_MOSI_PIN)) {
+        Serial.println ("ETH start Failed!");
+        return;
+    }
+    Serial.printf ("Ethernet connecting ...");
+    while (! ETH.connected ())
+        delay (500), Serial.printf (".");
+    Serial.printf (" connected (%d Mbps) ...", ETH.linkSpeed ());
+    while (ETH.localIP () == INADDR_NONE)
+        delay (500), Serial.printf (".");
+    Serial.printf (" allocated (%s)\n", ETH.localIP ().toString ().c_str ());
+}
+
+#endif
+
+// -----------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------
+
+#ifdef USE_WIFI
+#if ! defined(WIFI_SSID) || ! defined(WIFI_PASS)
+#include "Secrets.hpp"
+#endif
+#endif
+
+void startNetwork () {
+#if defined(USE_WIFI)
+    startWiFi (WIFI_SSID, WIFI_PASS);
+#elif defined(USE_ETHERNET)
+    startEthernet ();
+#endif
 }
 
 // -----------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------
 
 #include "SpeedTest.hpp"
-#if ! defined(WIFI_SSID) || ! defined(WIFI_PASS)
-#include "Secrets.hpp"
-#endif
 
 // #define SPEEDTEST_SERVER "speedtest.local:8080"
 // #define SPEEDTEST_PROFILE SpeedTestProfile::SLOW
@@ -135,7 +213,8 @@ void setup () {
     delay (5 * 1000);
     Serial.begin (115200);
     Serial.println ("UP");
-    startWiFi (WIFI_SSID, WIFI_PASS);
+    __esp32_specific_init ();
+    startNetwork ();
     startTime ();
     speedTest (speedTestConfig);
 }
